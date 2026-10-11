@@ -1,0 +1,55 @@
+jev-key-for-testing=apikey_214954dc8b9d30664ad1ba29b2bcba22e477_548a1a239167d75f91bc60a8a454f4f88e6909c03527cc68fe0e011a8c3da550
+
+{
+ "state": "Customer says that the wire transfer hasn't arrived after 3 days."
+  "questions": {
+    "issue_type": {
+      "type": "choice",
+      "instructions": "What kind of problem is this?",
+      "criteria": {
+        "fraud": "Suspected unauthorized activity, deception, account compromise, or fraudulent transaction",
+        "payment_delay": "A payment or transfer was initiated but has not arrived or completed within the expected time",
+        "account_opening": "Questions or problems related to opening, onboarding, or activating an account",
+        "investment_advice": "Questions seeking recommendations or guidance about investments"
+      }
+    }
+  },
+  "urgency": {
+    "type": "choice",
+    "instructions": "How urgent does this issue appear?",
+    "criteria": {
+      "routine": "Normal service inquiry with no indication of immediate financial harm.",
+      "elevated": "Delay or issue that may cause financial or operational harm.",
+      "critical": "Potential fraud, significant financial loss, regulatory issue or immediate action required."
+    }
+  }
+}
+
+{
+  "state": "My running shoes arrived in the wrong size. Can I swap them for a size 10?",
+  "questions": {
+      "type": "choice",
+      "instructions": "Which team should handle this?",
+      "criteria": {
+        "returns": "Exchanges, wrong or damaged items",
+        "shipping": "Delivery status, delays, lost packages",
+        "billing": "Charges, invoices, payment problems"
+        }
+    }
+}
+
+{
+  "state": "Customer says that the wire transfer hasn't arrived after 3 days.",
+  "questions": {
+    "department": {
+      "type": "choice",
+      "instructions": "What kind of problem is this?",
+      "criteria": {
+        "fraud": "Suspected unauthorized activity, deception, account compromise, or fraudulent transaction",
+        "payment_delay": "A payment or transfer was initiated but has not arrived or completed within the expected time",
+        "account_opening": "Questions or problems related to opening, onboarding, or activating an account",
+        "investment_advice": "Questions seeking recommendations or guidance about investments"
+      }
+    }
+  }
+}
