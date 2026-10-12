@@ -1,18 +1,184 @@
 [
   {
-  "id": "billing-wording-java-error",
-  "document": "I was charged for the premium plan, but when I try to update my payment method the app shows a Java NullPointerException. What should I do?"
-  },  
-  {
-    "id": "business-signup-with-red-herring",
-    "document": "I have been a premium user for 2 years now. My friend's mind was blown by the dashboard view and he also wants to sign up for a new account for business. What do I do?"
+    "id": "final-certificate-requires-covenant-test",
+    "expected_action": "covenant_test",
+    "rationale": "A final certificate reports a metric subject to a maintenance covenant, and the analyst has not completed the documented calculation.",
+    "state": {
+      "as_of": "2026-10-01T10:00:00-04:00",
+      "borrower": "Meridian Components, Inc.",
+      "facility": "Meridian Term Loan B",
+      "observed_fact": {
+        "description": "Borrower delivered its final quarterly compliance certificate. It reports Total Net Leverage of 5.8x for the quarter ended September 30, 2026.",
+        "source": "Borrower-signed compliance certificate received through the agent bank portal",
+        "status": "Final; not yet independently recalculated"
+      },
+      "agreement_terms": {
+        "provision": "Maintenance leverage covenant",
+        "test_frequency": "Quarterly, as of quarter end",
+        "maximum_total_net_leverage": "6.0x",
+        "reported_calculation": "5.8x",
+        "reporting_deadline": "10 business days after quarter end",
+        "definitions": "Total Net Leverage and permitted cash netting are defined in the executed agreement. The full calculation worksheet is attached to the case file.",
+        "cure_right": "The executed agreement includes an equity cure right; no cure has been asserted.",
+        "status": "Current executed agreement; no later amendment or waiver located"
+      },
+      "workflow_context": {
+        "certificate_due": true,
+        "certificate_received": true,
+        "prior_open_issue": false,
+        "analyst_recalculation_complete": false
+      },
+      "policy": {
+        "covenant_test": "Run the documented covenant calculation when a final certificate reports a maintenance covenant metric.",
+        "borrower_follow_up": "Request missing, unclear, internally inconsistent, or late information needed to complete the test.",
+        "counsel_review": "Route questions about interpretation, enforceability, notice, waiver, default, or cure rights to counsel.",
+        "credit_review": "Escalate a verified breach, material deterioration, or a policy-defined risk trigger to credit.",
+        "no_action": "Use only when the fact does not require one of these actions under the supplied agreement and policy."
+      }
+    }
   },
   {
-    "id": "charged-but-plan-not-active",
-    "document": "I was charged for the premium plan, but the app still shows me as a free user. What do I do?"
+    "id": "missing-worksheet-requires-borrower-follow-up",
+    "expected_action": "borrower_follow_up",
+    "rationale": "The certificate is due and received, but the calculation worksheet needed to test compliance is absent.",
+    "state": {
+      "as_of": "2026-10-02T11:30:00-04:00",
+      "borrower": "Meridian Components, Inc.",
+      "facility": "Meridian Term Loan B",
+      "observed_fact": {
+        "description": "The quarterly compliance certificate was received, but the EBITDA and net-debt schedules supporting the reported leverage ratio were not attached.",
+        "source": "Agent bank portal receipt log and document package",
+        "status": "Received package is incomplete; no supporting schedules in the portal"
+      },
+      "agreement_terms": {
+        "provision": "Quarterly compliance certificate and maintenance leverage covenant",
+        "reporting_deadline": "10 business days after quarter end",
+        "required_support": "Borrower must provide the certificate and supporting calculation detail required by the executed agreement.",
+        "status": "Current executed agreement; no later amendment or waiver located"
+      },
+      "workflow_context": {
+        "certificate_due": true,
+        "certificate_received": true,
+        "supporting_schedules_received": false,
+        "analyst_recalculation_complete": false,
+        "prior_request_outstanding": false
+      },
+      "policy": {
+        "covenant_test": "Run the documented covenant calculation when the required final certificate and supporting information are available.",
+        "borrower_follow_up": "Request missing, unclear, internally inconsistent, or late information needed to complete the test.",
+        "counsel_review": "Route questions about interpretation, enforceability, notice, waiver, default, or cure rights to counsel.",
+        "credit_review": "Escalate a verified breach, material deterioration, or a policy-defined risk trigger to credit.",
+        "no_action": "Use only when the fact does not require one of these actions under the supplied agreement and policy."
+      }
+    }
   },
   {
-    "id": "wrong-item",
-    "document": "I was charged for my order of chewing gum and instead received a television. Do I return it?"
+    "id": "verified-covenant-breach-requires-credit-review",
+    "expected_action": "credit_review",
+    "rationale": "The analyst completed the agreement-defined calculation, verified a ratio above the maximum, and no cure or waiver is recorded; policy requires escalation.",
+    "state": {
+      "as_of": "2026-10-06T14:00:00-04:00",
+      "borrower": "Meridian Components, Inc.",
+      "facility": "Meridian Term Loan B",
+      "observed_fact": {
+        "description": "The completed covenant calculation shows Total Net Leverage of 6.3x against a 6.0x maximum for the quarter ended September 30, 2026.",
+        "source": "Final borrower certificate and analyst reperformance using the executed agreement definitions",
+        "status": "Calculation independently checked; result verified; no cure notice or waiver recorded"
+      },
+      "agreement_terms": {
+        "provision": "Maintenance leverage covenant",
+        "test_frequency": "Quarterly, as of quarter end",
+        "maximum_total_net_leverage": "6.0x",
+        "reperformed_total_net_leverage": "6.3x",
+        "cure_right": "An equity cure right exists under the agreement, but no cure has been asserted or documented as of the decision time.",
+        "status": "Current executed agreement; no later amendment or waiver located"
+      },
+      "workflow_context": {
+        "certificate_due": true,
+        "certificate_received": true,
+        "analyst_recalculation_complete": true,
+        "second_review_complete": true,
+        "cure_notice_received": false,
+        "waiver_recorded": false
+      },
+      "policy": {
+        "covenant_test": "Use when the agreement-defined calculation has not yet been completed.",
+        "borrower_follow_up": "Request missing, unclear, internally inconsistent, or late information needed to complete the test.",
+        "counsel_review": "Route legal interpretation or questions about formal notice, default status, waiver, or cure rights to counsel. A legal conclusion is not made by this routing decision.",
+        "credit_review": "Escalate a verified breach or policy-defined risk trigger to the credit team promptly.",
+        "no_action": "Use only when no further step is warranted under the supplied agreement and policy."
+      }
+    }
+  },
+  {
+    "id": "cash-netting-interpretation-question-to-counsel",
+    "expected_action": "counsel_review",
+    "rationale": "The calculation depends on interpreting whether restricted cash qualifies for netting under an ambiguous agreement definition.",
+    "state": {
+      "as_of": "2026-10-07T09:15:00-04:00",
+      "borrower": "Meridian Components, Inc.",
+      "facility": "Meridian Term Loan B",
+      "observed_fact": {
+        "description": "The borrower included $18 million of cash in its net-debt calculation. The account statement identifies the cash as pledged to a separate equipment lender.",
+        "source": "Borrower certificate, account statement, and executed credit agreement",
+        "status": "Documents are present; whether this pledged cash is eligible for netting is disputed"
+      },
+      "agreement_terms": {
+        "provision": "Total Net Leverage definition permits netting of certain cash subject to conditions; the supplied clause does not clearly resolve this pledged-account fact pattern.",
+        "reported_total_net_leverage_including_cash": "5.9x",
+        "analyst_sensitivity_excluding_cash": "6.2x",
+        "status": "Current executed agreement; no amendment or waiver located"
+      },
+      "workflow_context": {
+        "certificate_received": true,
+        "calculation_reperformed": true,
+        "disputed_cash_item_material_to_threshold": true,
+        "prior_legal_interpretation_on_point": false
+      },
+      "policy": {
+        "covenant_test": "Use when calculation inputs are clear and the documented calculation remains to be performed.",
+        "borrower_follow_up": "Use when evidence is missing or facts about the account or pledge are unclear.",
+        "counsel_review": "Refer a material question about interpreting agreement definitions or legal rights to counsel.",
+        "credit_review": "Escalate a verified breach or other policy-defined risk trigger; do not resolve legal interpretation by assumption.",
+        "no_action": "Use only when no further step is warranted under the supplied agreement and policy."
+      }
+    }
+  },
+  {
+    "id": "superseded-metric-covered-by-executed-waiver-no-action",
+    "expected_action": "no_action",
+    "rationale": "The flagged ratio came from a superseded draft, while the final certificate is within covenant and an executed waiver covers the period; no open action remains.",
+    "state": {
+      "as_of": "2026-10-08T16:00:00-04:00",
+      "borrower": "Meridian Components, Inc.",
+      "facility": "Meridian Term Loan B",
+      "observed_fact": {
+        "description": "An automated feed surfaced a 6.1x leverage figure from a draft certificate. The final signed certificate reports 5.7x, and the executed waiver log shows a waiver of the leverage covenant for this test period.",
+        "source": "Document version register, signed final certificate, and executed waiver repository",
+        "status": "Draft value is superseded; final package and waiver independently verified"
+      },
+      "agreement_terms": {
+        "provision": "Maintenance leverage covenant; executed waiver applies to the quarter ended September 30, 2026.",
+        "maximum_total_net_leverage": "6.0x",
+        "final_reported_total_net_leverage": "5.7x",
+        "waiver_status": "Executed by required parties and effective for the stated test period",
+        "status": "Current agreement and waiver confirmed"
+      },
+      "workflow_context": {
+        "final_certificate_received": true,
+        "final_calculation_reperformed": true,
+        "draft_marked_superseded": true,
+        "waiver_verified": true,
+        "prior_issue_closed": true,
+        "outstanding_information_request": false
+      },
+      "policy": {
+        "covenant_test": "Use when the current, operative certificate still needs an agreement-defined calculation.",
+        "borrower_follow_up": "Use when current required information remains missing, unclear, inconsistent, or late.",
+        "counsel_review": "Use when the effect or validity of the waiver is legally uncertain.",
+        "credit_review": "Use for a verified breach, material deterioration, or policy-defined trigger not resolved by an effective waiver.",
+        "no_action": "Use when the flagged item is superseded or resolved, the operative facts are verified, and no follow-up remains."
+      }
+    }
   }
 ]
