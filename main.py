@@ -112,7 +112,7 @@ def extract_clef_choice(payload: dict[str, Any]) -> tuple[str | None, Any]:
     return None, answer
 
 
-def cloudflare_request_sync(state: dict[str, Any]) -> dict[str, Any]:
+def cloudflare_request_sync(state: dict[str, Any], model: str = CLOUDFLARE_MODEL) -> dict[str, Any]:
     account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID")
     auth_token = os.getenv("CLOUDFLARE_AUTH_TOKEN")
     if not account_id or not auth_token:
@@ -122,13 +122,13 @@ def cloudflare_request_sync(state: dict[str, Any]) -> dict[str, Any]:
 
     url = (
         "https://api.cloudflare.com/client/v4/accounts/"
-        f"{account_id}/ai/run/{CLOUDFLARE_MODEL}"
+        f"{account_id}/ai/run/{model}"
     )
     response = requests.post(
         url,
         headers={"Authorization": f"Bearer {auth_token}"},
         json={
-            "model": "clef-flash" if "clef-flash" in CLOUDFLARE_MODEL else "clef",
+            "model": "clef-flash" if "clef-flash" in model else "clef",
             "state": state,
             "questions": CLEF_QUESTIONS,
         },
@@ -141,10 +141,12 @@ def cloudflare_request_sync(state: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-async def call_clef(state: dict[str, Any]) -> tuple[str | None, float, Any, str | None]:
+async def call_clef(
+    state: dict[str, Any], model: str = CLOUDFLARE_MODEL
+) -> tuple[str | None, float, Any, str | None]:
     start = time.perf_counter()
     try:
-        payload = await asyncio.to_thread(cloudflare_request_sync, state)
+        payload = await asyncio.to_thread(cloudflare_request_sync, state, model)
         elapsed_ms = (time.perf_counter() - start) * 1000
         choice, raw_answer = extract_clef_choice(payload)
         if choice is None:
