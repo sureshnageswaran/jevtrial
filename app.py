@@ -180,10 +180,7 @@ def render_fields(fields: dict[str, Any]) -> None:
 
 
 def render_results(case: dict[str, Any]) -> None:
-    header, button = st.columns([3, 1], vertical_alignment="center")
-    header.subheader("Results")
-    if button.button("▶ Run this test", width="stretch"):
-        run_cases([case], f"Running {case['id']}")
+    st.subheader("Results")
 
     case_results = st.session_state.results.get(case["id"], {})
     if not case_results:
@@ -244,8 +241,8 @@ def render_explanation(case: dict[str, Any]) -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Private-credit benchmark", layout="wide")
-    st.title("Private-credit monitoring benchmark")
+    st.set_page_config(page_title="Private Markets Middle Office | Decision Models Benchmark", layout="wide")
+    st.title("Private Markets Middle Office | Decision Models Benchmark")
     st.caption("Next-action decisions from Jev, Cloudflare Clef-flash, and OpenAI Luna, with timings.")
 
     cases = load_cases()
@@ -261,7 +258,13 @@ def main() -> None:
             st.caption(f"Last run took {st.session_state.run_seconds:,.1f} s wall-clock")
         render_summary(cases)
         st.divider()
-        st.markdown("**Tests**")
+        heading, button = st.columns([1, 1], vertical_alignment="center")
+        heading.markdown("**Tests**")
+        if button.button("▶ Run this test", type="primary", width="stretch"):
+            # The radio below holds the selection; its value is already in session state.
+            case = cases[st.session_state.get("selected_case", 0)]
+            run_cases([case], f"Running {case['id']}")
+            st.rerun()
         st.caption("Icons: " + " · ".join(p.name for p in PROVIDERS) + "  (✅ match, ❌ miss, ⚠️ error, ⚪ not run)")
         selected_index = st.radio(
             "Tests",
