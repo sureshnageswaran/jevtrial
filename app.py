@@ -95,25 +95,18 @@ def run_cases(cases: list[dict[str, Any]], progress_text: str) -> None:
     bar.empty()
 
 
-def match_label(result: ProviderResult | None, expected: str) -> str:
+def status_icon(result: ProviderResult | None, expected: str) -> str:
     if result is None:
-        return "–"
+        return "⚪"
     if result.error:
-        return "Error"
-    return "✅ Match" if result.choice == expected else "❌ Miss"
+        return "⚠️"
+    return "✅" if result.choice == expected else "❌"
 
 
-def build_table(cases: list[dict[str, Any]]) -> pd.DataFrame:
-    rows = []
-    for case in cases:
-        case_results = st.session_state.results.get(case["id"], {})
-        row = {"Case": case["id"], "Expected": case["expected_action"]}
-        for provider in PROVIDERS:
-            result = case_results.get(provider.name)
-            row[f"{provider.name}"] = match_label(result, case["expected_action"])
-            row[f"{provider.name} time"] = f"{result.ms:,.0f} ms" if result else "–"
-        rows.append(row)
-    return pd.DataFrame(rows)
+def case_label(case: dict[str, Any]) -> str:
+    case_results = st.session_state.results.get(case["id"], {})
+    icons = "".join(status_icon(case_results.get(p.name), case["expected_action"]) for p in PROVIDERS)
+    return f"{icons}  {case['id']}"
 
 
 def summary_stats(cases: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -164,24 +157,33 @@ def render_summary(cases: list[dict[str, Any]]) -> None:
                 st.caption("No results yet")
 
 
-def render_case_detail(case: dict[str, Any]) -> None:
-    st.subheader(case["id"])
-    st.markdown(f"**Observed fact:** {observed_description(case['state'])}")
-    st.markdown(f"**Expected action:** `{case['expected_action']}`")
-    if case.get("rationale"):
-        with st.expander("Rationale"):
-            st.write(case["rationale"])
+def humanize(key: str) -> str:
+    return key.replace("_", " ").capitalize()
+
+
+def render_fields(fields: dict[str, Any]) -> None:
+    for key, value in fields.items():
+        if isinstance(value, bool):
+            value = "Yes" if value else "No"
+        st.markdown(f"- **{humanize(key)}:** {value}")
+
+
+def render_results(case: dict[str, Any]) -> None:
+    header, button = st.columns([3, 1], vertical_alignment="center")
+    header.subheader("Results")
+    if button.button("▶ Run this test", width="stretch"):
+        run_cases([case], f"Running {case['id']}")
 
     case_results = st.session_state.results.get(case["id"], {})
     if not case_results:
-        st.info("No results for this case yet. Use **Run selected** or **Run all cases**.")
+        st.info("No results for this test yet. Use **Run this test** or **Run all tests**.")
         return
 
-    for provider in PROVIDERS:
+    for column, provider in zip(st.columns(len(PROVIDERS)), PROVIDERS):
         result = case_results.get(provider.name)
-        with st.container(border=True):
-            header, timing = st.columns([3, 2])
-            header.markdown(f"**{provider.name}**")
+        with column, st.container(border=True):
+            name, timing = st.columns([3, 2])
+            name.markdown(f"**{provider.name}**")
             if result is None:
                 st.caption("Not run yet")
                 continue
@@ -195,10 +197,37 @@ def render_case_detail(case: dict[str, Any]) -> None:
                 st.warning(f"Chose `{result.choice}` — expected `{case['expected_action']}`")
             if isinstance(result.raw, dict) and result.raw.get("probabilities"):
                 st.caption("Probabilities")
-                st.bar_chart(pd.Series(result.raw["probabilities"]).reindex(list(ACTION_CHOICES)).fillna(0))
+                st.bar_chart(
+                    pd.Series(result.raw["probabilities"]).reindex(list(ACTION_CHOICES)).fillna(0),
+                    height=180,
+                )
             if result.raw is not None:
                 with st.expander("Raw response"):
                     st.json(result.raw, expanded=False)
+
+
+def render_explanation(case: dict[str, Any]) -> None:
+    state = case["state"]
+    st.subheader("About this test")
+    st.markdown(f"**{case['id']}**")
+    meta = [state.get(k) for k in ("borrower", "facility", "as_of") if state.get(k)]
+    if meta:
+        st.caption(" · ".join(meta))
+    st.markdown(f"**Observed fact:** {observed_description(state)}")
+    st.markdown(f"**Expected action:** `{case['expected_action']}`")
+    if case.get("rationale"):
+        st.markdown(f"**Why:** {case['rationale']}")
+
+    sections = [
+        ("Observed fact details", state.get("observed_fact")),
+        ("Agreement terms", state.get("agreement_terms")),
+        ("Workflow context", state.get("workflow_context")),
+        ("Policy", state.get("policy")),
+    ]
+    for title, fields in sections:
+        if isinstance(fields, dict) and fields:
+            with st.expander(title):
+                render_fields(fields)
 
 
 def main() -> None:
@@ -210,35 +239,31 @@ def main() -> None:
     st.session_state.setdefault("results", {})
     st.session_state.setdefault("run_seconds", None)
 
-    selected_index = st.session_state.get("selected_case", 0)
-    controls = st.columns([1, 1, 4])
-    if controls[0].button("▶ Run all cases", type="primary", width="stretch"):
-        run_cases(cases, "Running all cases")
-    if controls[1].button("▶ Run selected", width="stretch"):
-        run_cases([cases[selected_index]], f"Running {cases[selected_index]['id']}")
-    if st.session_state.run_seconds is not None:
-        controls[2].caption(f"Last run took {st.session_state.run_seconds:,.1f} s wall-clock")
+    left, right = st.columns([1, 2], gap="large")
 
-    render_summary(cases)
-    st.divider()
-
-    left, right = st.columns([3, 2], gap="large")
     with left:
-        st.markdown("**Cases** — click a row to see its results")
-        event = st.dataframe(
-            build_table(cases),
-            on_select="rerun",
-            selection_mode="single-row",
-            hide_index=True,
-            width="stretch",
-            key="case_table",
+        if st.button("▶ Run all tests", type="primary", width="stretch"):
+            run_cases(cases, "Running all tests")
+        if st.session_state.run_seconds is not None:
+            st.caption(f"Last run took {st.session_state.run_seconds:,.1f} s wall-clock")
+        render_summary(cases)
+        st.divider()
+        st.markdown("**Tests**")
+        st.caption("Icons: " + " · ".join(p.name for p in PROVIDERS) + "  (✅ match, ❌ miss, ⚠️ error, ⚪ not run)")
+        selected_index = st.radio(
+            "Tests",
+            range(len(cases)),
+            format_func=lambda i: case_label(cases[i]),
+            key="selected_case",
+            label_visibility="collapsed",
         )
-        selected_rows = event.selection.rows if event and event.selection else []
-        if selected_rows:
-            st.session_state.selected_case = selected_rows[0]
-            selected_index = selected_rows[0]
+
+    case = cases[selected_index]
     with right:
-        render_case_detail(cases[selected_index])
+        with st.container(border=True, height=480):
+            render_results(case)
+        with st.container(border=True, height=420):
+            render_explanation(case)
 
 
 if __name__ == "__main__":
