@@ -180,5 +180,62 @@
         "no_action": "Use when the flagged item is superseded or resolved, the operative facts are verified, and no follow-up remains."
       }
     }
+  },
+  {
+    "id": "delayed-borrowing-base-certificate-requires-borrower-follow-up",
+    "expected_action": "borrower_follow_up",
+    "rationale": "The borrowing base certificate required by the agreement has not been received. The immediate workflow requirement is to obtain the missing reporting before any calculations, compliance testing, collateral analysis, or credit assessment can occur.",
+    "state": {
+      "as_of": "2026-11-05T09:00:00-05:00",
+      "borrower": "Summit Industrial Holdings LLC",
+      "facility": "Asset Based Revolver",
+      "observed_fact": {
+        "description": "The October borrowing base certificate was due on October 31, 2026 and has not been received.",
+        "source": "Administrative agent reporting portal",
+        "status": "Past due",
+        "days_late": 5,
+        "prior_month_certificate_received": true,
+        "historical_reporting_issues": false
+      },
+      "agreement_terms": {
+        "provision": "Monthly borrowing base certificate",
+        "reporting_deadline": "Last business day of each month",
+        "availability_determined_by": "Most recent approved borrowing base",
+        "advance_rate_definitions": "Contained in executed credit agreement",
+        "default_threshold": "Reporting obligations must be satisfied as required by the agreement",
+        "status": "Current executed agreement; no amendment, waiver, forbearance, or reporting relief located"
+      },
+      "workflow_context": {
+        "certificate_due": true,
+        "certificate_received": false,
+        "supporting_schedules_received": false,
+        "prior_request_outstanding": false,
+        "credit_team_notified": false,
+        "waiver_recorded": false,
+        "default_declared": false,
+        "borrowing_base_calculation_complete": false,
+        "portfolio_manager_review_complete": false
+      },
+      "policy": {
+        "covenant_test": "Perform the documented borrowing base or covenant calculation when required reporting and supporting information are available and current.",
+        "borrower_follow_up": "Request missing, late, incomplete, unverifiable, internally inconsistent, or otherwise deficient reporting needed to perform contractual monitoring.",
+        "counsel_review": "Refer questions involving contractual interpretation, reporting obligations, amendment effectiveness, waiver validity, notice requirements, enforceability, or lender remedies to counsel.",
+        "credit_review": "Escalate verified borrowing base deterioration, collateral impairment, covenant breaches, payment defaults, or policy-defined risk triggers to the credit team.",
+        "operations_exception": "Log and monitor an operational exception when a servicing, booking, reconciliation, or workflow processing issue is identified.",
+        "reporting_exception": "Record a reporting deficiency when required information remains outstanding after a borrower request has gone unanswered.",
+        "relationship_manager_notification": "Notify coverage personnel when borrower communication or outreach may be required.",
+        "portfolio_manager_review": "Route to portfolio management when a completed analysis requires portfolio assessment or monitoring action.",
+        "collateral_review": "Perform collateral analysis after required collateral reporting has been received and validated.",
+        "reserve_analysis": "Evaluate whether reserves, availability blocks, or other adjustments should be considered when sufficient current information is available.",
+        "cash_flow_analysis": "Perform cash flow assessment when the required financial reporting package has been received.",
+        "risk_committee_review": "Escalate matters requiring committee oversight after material risk has been verified.",
+        "watchlist_consideration": "Evaluate watchlist status when a policy-defined credit concern has been validated.",
+        "waiver_evaluation": "Consider whether a waiver request should be reviewed after the borrower has requested relief or an exception.",
+        "default_assessment": "Assess whether a contractual default exists after the relevant facts have been established and documented.",
+        "second_level_review": "Obtain secondary review when required by policy following completion of the primary analysis.",
+        "data_quality_investigation": "Investigate whether missing, conflicting, delayed, or anomalous information may be due to a data-quality issue.",
+        "no_action": "Use only when operative facts have been verified and no follow-up action is required under the agreement and policy."
+      }
+    }
   }
 ]

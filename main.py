@@ -4,6 +4,7 @@ Required environment variables:
   TYPESAFE_API_KEY             Jev API key (as required by typesafe_sdk)
   CLOUDFLARE_ACCOUNT_ID        Cloudflare account ID
   CLOUDFLARE_AUTH_TOKEN        Cloudflare API token with Workers AI access
+  OPENAI_API_KEY               OpenAI API key (Decisions API)
 
 Optional:
   CLOUDFLARE_MODEL             @cf/cloudflare/clef (default) or
@@ -30,6 +31,9 @@ from typesafe_sdk import AsyncTypeSafeClient, Choice
 CASES_FILE = Path(__file__).with_name("tests.json")
 CLOUDFLARE_MODEL = os.getenv("CLOUDFLARE_MODEL", "@cf/cloudflare/clef")
 CLOUDFLARE_TIMEOUT_SECONDS = 60
+OPENAI_DECISIONS_URL = "https://api.openai.com/v1/decisions"
+OPENAI_MODEL = "gpt-6-luna"
+OPENAI_TIMEOUT_SECONDS = 60
 
 ACTION_CHOICES = {
     "no_action": "No action is warranted under the supplied agreement, facts, workflow context, and policy.",
@@ -53,22 +57,45 @@ QUESTION_INSTRUCTIONS = (
     "the supplied policy calls for no further step."
 )
 
-# Jev SDK schema.
-JEV_QUESTIONS = {
-    "next_action": Choice(
-        instructions=QUESTION_INSTRUCTIONS,
-        criteria=ACTION_CHOICES,
-    )
-}
+# Used when a case supplies its own action catalog in state["policy"].
+CATALOG_INSTRUCTIONS = (
+    "Choose the single next workflow action for private-credit monitoring from "
+    "the supplied action catalog. Use only the supplied observed fact, evidence "
+    "status, agreement terms, workflow context, and policy. Several actions may "
+    "look relevant: select the earliest appropriate next step given what has and "
+    "has not yet happened, and do not choose an action whose policy preconditions "
+    "are not yet met. A reported metric is not a verified breach. Do not decide "
+    "that a default legally occurred, and do not infer terms that are not "
+    "supplied. Use no_action only when the supplied policy calls for no further step."
+)
+
+
+def question_spec(state: dict[str, Any]) -> tuple[str, dict[str, str]]:
+    """Return (instructions, criteria) for a case.
+
+    A case whose policy names any action outside ACTION_CHOICES is a catalog
+    case: its policy keys are the allowed answers and its policy text describes
+    them. Otherwise the standard five actions are used.
+    """
+    policy = state.get("policy")
+    if isinstance(policy, dict) and not set(policy) <= set(ACTION_CHOICES):
+        return CATALOG_INSTRUCTIONS, {name: str(text) for name, text in policy.items()}
+    return QUESTION_INSTRUCTIONS, ACTION_CHOICES
+
+
+def case_actions(state: dict[str, Any]) -> list[str]:
+    return list(question_spec(state)[1])
+
+
+def jev_questions(state: dict[str, Any]) -> dict[str, Choice]:
+    instructions, criteria = question_spec(state)
+    return {"next_action": Choice(instructions=instructions, criteria=criteria)}
+
 
 # Cloudflare Workers AI uses its own JSON schema for the same semantic question.
-CLEF_QUESTIONS = {
-    "next_action": {
-        "type": "choice",
-        "instructions": QUESTION_INSTRUCTIONS,
-        "criteria": ACTION_CHOICES,
-    }
-}
+def clef_questions(state: dict[str, Any]) -> dict[str, Any]:
+    instructions, criteria = question_spec(state)
+    return {"next_action": {"type": "choice", "instructions": instructions, "criteria": criteria}}
 
 
 def load_cases() -> list[dict[str, Any]]:
@@ -82,12 +109,12 @@ def load_cases() -> list[dict[str, Any]]:
             raise ValueError(f"Case {index} must contain {sorted(required)}.")
         if not isinstance(case["state"], dict):
             raise ValueError(f"Case {index} 'state' must be an object.")
-        if case["expected_action"] not in ACTION_CHOICES:
-            raise ValueError(f"Case {index} has an unknown expected_action.")
+        if case["expected_action"] not in case_actions(case["state"]):
+            raise ValueError(f"Case {index} expected_action is not one of its allowed actions.")
     return cases
 
 
-def extract_clef_choice(payload: dict[str, Any]) -> tuple[str | None, Any]:
+def extract_clef_choice(payload: dict[str, Any], actions: list[str]) -> tuple[str | None, Any]:
     """Return selected choice and the raw answer object from Workers AI output."""
     result = payload.get("result", payload)
     answers = result.get("answers", {}) if isinstance(result, dict) else {}
@@ -107,7 +134,7 @@ def extract_clef_choice(payload: dict[str, Any]) -> tuple[str | None, Any]:
             return max(probs, key=probs.get), answer
         # Occasionally the answer itself may be a probability map.
         numeric = {k: v for k, v in answer.items() if isinstance(v, (int, float))}
-        if numeric and set(numeric).issubset(ACTION_CHOICES):
+        if numeric and set(numeric).issubset(actions):
             return max(numeric, key=numeric.get), answer
     return None, answer
 
@@ -130,7 +157,7 @@ def cloudflare_request_sync(state: dict[str, Any], model: str = CLOUDFLARE_MODEL
         json={
             "model": "clef-flash" if "clef-flash" in model else "clef",
             "state": state,
-            "questions": CLEF_QUESTIONS,
+            "questions": clef_questions(state),
         },
         timeout=CLOUDFLARE_TIMEOUT_SECONDS,
     )
@@ -148,9 +175,69 @@ async def call_clef(
     try:
         payload = await asyncio.to_thread(cloudflare_request_sync, state, model)
         elapsed_ms = (time.perf_counter() - start) * 1000
-        choice, raw_answer = extract_clef_choice(payload)
+        choice, raw_answer = extract_clef_choice(payload, case_actions(state))
         if choice is None:
             return None, elapsed_ms, raw_answer, "Could not find next_action in Cloudflare response"
+        return choice, elapsed_ms, raw_answer, None
+    except Exception as exc:
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        return None, elapsed_ms, None, f"{type(exc).__name__}: {exc}"
+
+
+# The Decisions API takes a list of {value, description} choices and a string input.
+def luna_questions(state: dict[str, Any]) -> list[dict[str, Any]]:
+    instructions, criteria = question_spec(state)
+    return [{
+        "type": "choice",
+        "name": "next_action",
+        "instructions": instructions,
+        "choices": [{"value": name, "description": text} for name, text in criteria.items()],
+    }]
+
+
+def openai_request_sync(state: dict[str, Any]) -> dict[str, Any]:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("Set OPENAI_API_KEY in your environment or .env file.")
+    response = requests.post(
+        OPENAI_DECISIONS_URL,
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={
+            "model": OPENAI_MODEL,
+            # input must be a string, so send the same state as JSON text.
+            "input": json.dumps(state, indent=2, ensure_ascii=False),
+            "questions": luna_questions(state),
+        },
+        timeout=OPENAI_TIMEOUT_SECONDS,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"HTTP {response.status_code}: {response.text[:500]}")
+    return response.json()
+
+
+def extract_luna_choice(payload: dict[str, Any]) -> tuple[str | None, Any]:
+    """Return selected choice and a raw answer with probabilities as a {value: p} map."""
+    answers = payload.get("answers") or []
+    answer = next((a for a in answers if isinstance(a, dict) and a.get("name") == "next_action"), None)
+    if answer is None:
+        return None, payload
+    raw = {
+        **answer,
+        "probabilities": {p["value"]: p["probability"] for p in answer.get("probabilities") or []},
+        "model": payload.get("model"),
+        "usage": payload.get("usage"),
+    }
+    return answer.get("choice"), raw
+
+
+async def call_luna(state: dict[str, Any]) -> tuple[str | None, float, Any, str | None]:
+    start = time.perf_counter()
+    try:
+        payload = await asyncio.to_thread(openai_request_sync, state)
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        choice, raw_answer = extract_luna_choice(payload)
+        if choice is None:
+            return None, elapsed_ms, raw_answer, "Could not find next_action in OpenAI response"
         return choice, elapsed_ms, raw_answer, None
     except Exception as exc:
         elapsed_ms = (time.perf_counter() - start) * 1000
@@ -171,10 +258,14 @@ async def main() -> None:
     cloudflare_ready = bool(os.getenv("CLOUDFLARE_ACCOUNT_ID") and os.getenv("CLOUDFLARE_AUTH_TOKEN"))
     if not cloudflare_ready:
         print("Cloudflare calls will be skipped: set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AUTH_TOKEN.")
+    openai_ready = bool(os.getenv("OPENAI_API_KEY"))
+    if not openai_ready:
+        print("OpenAI calls will be skipped: set OPENAI_API_KEY.")
 
     stats: dict[str, dict[str, Any]] = {
         "Jev": {"correct": 0, "completed": 0, "latencies": []},
         "Clef": {"correct": 0, "completed": 0, "latencies": []},
+        "Luna": {"correct": 0, "completed": 0, "latencies": []},
     }
 
     async with AsyncTypeSafeClient() as client:
@@ -188,7 +279,7 @@ async def main() -> None:
             # Jev
             started = time.perf_counter()
             try:
-                response = await client.system_one(state=state, questions=JEV_QUESTIONS)
+                response = await client.system_one(state=state, questions=jev_questions(state))
                 jev_ms = (time.perf_counter() - started) * 1000
                 jev_action = response.choices["next_action"].choice
                 stats["Jev"]["completed"] += 1
@@ -216,9 +307,21 @@ async def main() -> None:
                     if isinstance(raw_answer, dict) and "probabilities" in raw_answer:
                         print(f"      Probabilities: {raw_answer['probabilities']}")
 
+            # OpenAI Luna
+            if openai_ready:
+                luna_action, luna_ms, raw_answer, error = await call_luna(state)
+                if error:
+                    print(f"Luna: ERROR | {luna_ms:.1f} ms | {error}")
+                else:
+                    stats["Luna"]["completed"] += 1
+                    stats["Luna"]["latencies"].append(luna_ms)
+                    luna_match = luna_action == expected
+                    stats["Luna"]["correct"] += int(luna_match)
+                    print(f"Luna: {luna_action} | {luna_ms:.1f} ms | {'MATCH' if luna_match else 'MISS'}")
+
     print("\n=== Summary ===")
     for model, result in stats.items():
-        if model == "Clef" and not cloudflare_ready:
+        if (model == "Clef" and not cloudflare_ready) or (model == "Luna" and not openai_ready):
             continue
         completed = result["completed"]
         if completed:

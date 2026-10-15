@@ -15,7 +15,7 @@ import pandas as pd
 import streamlit as st
 from typesafe_sdk import AsyncTypeSafeClient
 
-from main import ACTION_CHOICES, JEV_QUESTIONS, call_clef, load_cases, observed_description
+from main import call_clef, call_luna, case_actions, jev_questions, load_cases, observed_description
 
 CLEF_FLASH_MODEL = "@cf/cloudflare/clef-flash"
 
@@ -39,9 +39,15 @@ async def run_jev(client: AsyncTypeSafeClient | None, state: dict[str, Any]) -> 
     try:
         if client is None:
             raise RuntimeError("Jev client could not be created. Check TYPESAFE_API_KEY.")
-        response = await client.system_one(state=state, questions=JEV_QUESTIONS)
+        response = await client.system_one(state=state, questions=jev_questions(state))
         ms = (time.perf_counter() - start) * 1000
-        return ProviderResult(choice=response.choices["next_action"].choice, ms=ms)
+        answer = response.choices["next_action"]
+        raw = {
+            **answer.model_dump(mode="json"),
+            "model": response.model,
+            "usage": response.usage.model_dump(mode="json"),
+        }
+        return ProviderResult(choice=answer.choice, ms=ms, raw=raw)
     except Exception as exc:
         ms = (time.perf_counter() - start) * 1000
         return ProviderResult(choice=None, ms=ms, error=f"{type(exc).__name__}: {exc}")
@@ -52,10 +58,15 @@ async def run_clef_flash(_client: AsyncTypeSafeClient | None, state: dict[str, A
     return ProviderResult(choice=choice, ms=ms, raw=raw, error=error)
 
 
-# Future providers (e.g. OpenAI) go here.
+async def run_luna(_client: AsyncTypeSafeClient | None, state: dict[str, Any]) -> ProviderResult:
+    choice, ms, raw, error = await call_luna(state)
+    return ProviderResult(choice=choice, ms=ms, raw=raw, error=error)
+
+
 PROVIDERS = [
     Provider("Jev", run_jev),
     Provider("Clef-flash", run_clef_flash),
+    Provider("OpenAI Luna", run_luna),
 ]
 
 
@@ -196,10 +207,12 @@ def render_results(case: dict[str, Any]) -> None:
             else:
                 st.warning(f"Chose `{result.choice}` — expected `{case['expected_action']}`")
             if isinstance(result.raw, dict) and result.raw.get("probabilities"):
+                actions = case_actions(case["state"])
                 st.caption("Probabilities")
                 st.bar_chart(
-                    pd.Series(result.raw["probabilities"]).reindex(list(ACTION_CHOICES)).fillna(0),
-                    height=180,
+                    pd.Series(result.raw["probabilities"]).reindex(actions).fillna(0),
+                    horizontal=True,
+                    height=max(180, 24 * len(actions)),
                 )
             if result.raw is not None:
                 with st.expander("Raw response"):
@@ -233,7 +246,7 @@ def render_explanation(case: dict[str, Any]) -> None:
 def main() -> None:
     st.set_page_config(page_title="Private-credit benchmark", layout="wide")
     st.title("Private-credit monitoring benchmark")
-    st.caption("Next-action decisions from Jev and Cloudflare Clef-flash, with timings.")
+    st.caption("Next-action decisions from Jev, Cloudflare Clef-flash, and OpenAI Luna, with timings.")
 
     cases = load_cases()
     st.session_state.setdefault("results", {})

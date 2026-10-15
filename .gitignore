@@ -4,8 +4,12 @@ __pycache__/
 build/
 dist/
 wheels/
+unused/
 *.egg-info
 
 # Virtual environments
 .venv
 .env
+
+# Other
+clauderesume.txt
